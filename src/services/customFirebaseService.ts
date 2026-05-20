@@ -81,26 +81,36 @@ export function getCustomDb(): Firestore | null {
 }
 
 /**
- * Test connectivity with user's customized Firestore database
+ * Test connectivity with user's customized Firestore database with a 5-second timeout constraint
  */
 export async function testFirestoreConnection(config: CustomFirebaseConfig): Promise<boolean> {
-  try {
-    const tempAppName = "temp_test_firebase_app_" + Date.now();
-    const testApp = initializeApp(config, tempAppName);
-    const testDb = getFirestore(testApp);
-    const testDocRef = doc(testDb, "fiber_connection_test", "ping");
-    
-    // Attempt a light setDoc write test to confirm cloud read/write permissions are active
-    await setDoc(testDocRef, {
-      testedAt: new Date().toISOString(),
-      status: "online"
-    }, { merge: true });
-    
-    return true;
-  } catch (err) {
-    console.error("Failed connection test to customized cloud Firestore:", err);
-    throw err;
-  }
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("Handshake connection timed out. This usually means either: 1) Cloud Firestore hasn't been created yet in the Console, or 2) Security rules are blocking the connection. Try switching your Rules to Test Mode, or bypass the test."));
+    }, 5000);
+  });
+
+  const connectionPromise = (async () => {
+    try {
+      const tempAppName = "temp_test_firebase_app_" + Date.now();
+      const testApp = initializeApp(config, tempAppName);
+      const testDb = getFirestore(testApp);
+      const testDocRef = doc(testDb, "fiber_connection_test", "ping");
+      
+      // Attempt a light setDoc write test to confirm cloud read/write permissions are active
+      await setDoc(testDocRef, {
+        testedAt: new Date().toISOString(),
+        status: "online"
+      }, { merge: true });
+      
+      return true;
+    } catch (err: any) {
+      console.error("Failed connection test to customized cloud Firestore:", err);
+      throw err;
+    }
+  })();
+
+  return Promise.race([connectionPromise, timeoutPromise]);
 }
 
 /**

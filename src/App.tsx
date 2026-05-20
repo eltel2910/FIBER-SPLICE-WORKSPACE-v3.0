@@ -1211,6 +1211,40 @@ export default function App() {
     }
   };
 
+  const handleForceSaveCustomDbConfig = () => {
+    if (!customApiKey || !customProjectId || !customAppId) {
+      setDbTestState({ 
+        status: 'failed', 
+        message: 'API Key, Project ID, and App ID are required configuration attributes.' 
+      });
+      return;
+    }
+
+    const forceConfig: CustomFirebaseConfig = {
+      apiKey: customApiKey.trim(),
+      authDomain: customAuthDomain.trim(),
+      projectId: customProjectId.trim(),
+      storageBucket: customStorageBucket.trim(),
+      messagingSenderId: customMessagingSenderId.trim(),
+      appId: customAppId.trim()
+    };
+
+    saveCustomFirebaseConfig(forceConfig);
+    setIsUsingCustomDb(true);
+    initCustomFirebase();
+    
+    setDbTestState({ 
+      status: 'success', 
+      message: 'Linked successfully! Custom database configuration has been bypass-saved.' 
+    });
+
+    setTimeout(() => {
+      loadWorkspaceProjects(true);
+      setShowDbConfigModal(false);
+      setDbTestState({ status: 'idle' });
+    }, 1500);
+  };
+
   const handleDisableCustomDb = () => {
     if (confirm("Switch back to offline storage? Your local workspace changes are safe and will be restored immediately.")) {
       clearCustomFirebaseConfig();
@@ -2011,6 +2045,19 @@ export default function App() {
                         </span>
                       </div>
                       <p className="text-[0.68rem] font-medium leading-relaxed mt-1 opacity-90">{dbTestState.message}</p>
+                      
+                      {(dbTestState.status === 'testing' || dbTestState.status === 'failed') && (
+                        <div className="mt-3 pt-2 border-t border-white/10 flex justify-between items-center">
+                          <span className="text-[10px] opacity-60">Stuck or getting permission errors?</span>
+                          <button
+                            type="button"
+                            onClick={handleForceSaveCustomDbConfig}
+                            className="text-[10px] uppercase font-black tracking-wider text-orange-400 hover:text-orange-350 underline transition-colors cursor-pointer"
+                          >
+                            Bypass Test & Save Anyway
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
