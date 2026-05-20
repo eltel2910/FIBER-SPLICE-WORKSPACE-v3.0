@@ -1,0 +1,205 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Exo 2", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Share Tech Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@media print {
+  :root {
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --panel2: #f8fafc;
+    --border: #e2e8f0;
+    --accent: #2563eb;
+    --accent2: #7c3aed;
+    --text: #0f172a;
+    --text-dim: #475569;
+    --glow: none;
+    --grid: transparent;
+  }
+}
+
+.export-mode {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel2: #f8fafc;
+  --border: #e2e8f0;
+  --accent: #2563eb;
+  --accent2: #7c3aed;
+  --text: #0f172a;
+  --text-dim: #475569;
+  --glow: none;
+  --grid: transparent;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  header, .fixed, .no-print {
+    display: none !important;
+  }
+}
+
+.export-mode {
+  background: white !important;
+  color: black !important;
+}
+
+.export-mode .futuristic-grid {
+  background-image: none !important;
+}
+
+.export-mode header, 
+.export-mode .fixed, 
+.export-mode .no-print {
+  display: none !important;
+}
+
+.export-mode .cable-trunk {
+  background: #cbd5e1 !important;
+  border: 4px solid #000000 !important;
+  box-shadow: none !important;
+  color: #0f172a !important;
+}
+
+.export-mode .cable-trunk *:not(.cable-name-input),
+.export-mode .glow-text:not(.cable-name-input),
+.export-mode text,
+.export-mode span,
+.export-mode strong,
+.export-mode div:not(.cable-trunk) {
+  text-shadow: none !important;
+  color: #0f172a !important;
+  fill: #0f172a !important;
+}
+
+.export-mode svg circle {
+  stroke-width: 1px !important;
+}
+
+.export-mode .cable-name-input {
+  color: #c00000 !important;
+  fill: #c00000 !important;
+  font-weight: 900 !important;
+  font-size: 1.2rem !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  background: transparent !important;
+  -webkit-text-fill-color: #c00000 !important;
+  text-align: center !important;
+}
+
+.export-mode .network-chassis {
+  background: #d1d5db !important;
+  border-color: #9ca3af !important;
+  box-shadow: none !important;
+}
+
+.export-mode .network-chassis * {
+  color: #0f172a !important;
+  fill: #0f172a !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.export-mode input:not(.cable-name-input),
+.export-mode textarea:not(.cable-name-input) {
+  border: none !important;
+  background: transparent !important;
+  color: #0f172a !important;
+}
+
+/* Ensure text is dark and visible during export */
+.export-mode * {
+  color-adjust: exact !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.export-mode .border-dashed {
+  border-style: solid !important;
+  border-color: #cbd5e1 !important;
+  background: rgba(241, 245, 249, 0.5) !important;
+}
+
+.export-mode .bg-white\/10 {
+  background: white !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+
+.export-mode .bg-white\/10 * {
+  color: #0f172a !important;
+}
+
+:root {
+  --bg: #0a0d12;
+  --panel: #0f1520;
+  --panel2: #141c2b;
+  --border: #1e2d45;
+  --accent: #a3e635;
+  --accent2: #ff6a00;
+  --text: #ecfccb;
+  --text-dim: #4f6f52;
+  --glow: 0 0 12px rgba(163, 230, 53, 0.35);
+  --grid: rgba(163, 230, 53, 0.04);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+@layer utilities {
+  .glow-text {
+    text-shadow: var(--glow);
+  }
+  .futuristic-grid {
+    background-image: 
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+/* Redesigned Sidebar and Toolbar styles */
+.sidebar-tool-btn {
+  @apply w-11 h-11 flex items-center justify-center rounded-xl transition-all relative cursor-pointer border border-transparent;
+}
+
+.sidebar-tool-btn.active {
+  @apply bg-[var(--accent)] text-[#0a0c12] shadow-[0_0_20px_rgba(163,230,53,0.4)] border-[var(--accent)];
+}
+
+.sidebar-tool-btn:not(.active) {
+  @apply text-white/40 hover:text-white hover:bg-white/5 hover:border-white/10;
+}
+
+.sidebar-label {
+  @apply absolute left-14 bg-[#0a0c12] border border-white/10 px-3 py-1.5 rounded-lg text-[0.6rem] font-bold tracking-[2px] uppercase opacity-0 pointer-events-none translate-x-[-10px] group-hover:opacity-100 group-hover:translate-x-0 transition-all z-[200] whitespace-nowrap shadow-2xl;
+}
+
+.ribbon-group {
+  @apply flex items-center bg-white/[0.04] border border-white/5 rounded-xl p-1 gap-1;
+}
+
+.icon-btn-refined {
+  @apply p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2 border border-transparent hover:border-white/10 disabled:opacity-30 disabled:pointer-events-none;
+}
+
+.nav-link {
+  @apply text-[0.6rem] font-bold tracking-[2px] uppercase transition-all px-3 py-1 rounded-lg;
+}
+
