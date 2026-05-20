@@ -16,6 +16,19 @@ import { Tooltip } from './components/Tooltip';
 import { ProjectList } from './components/ProjectList';
 import { auth, googleProvider } from './firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
+import { 
+  getCustomFirebaseConfig, 
+  saveCustomFirebaseConfig, 
+  clearCustomFirebaseConfig, 
+  initCustomFirebase, 
+  testFirestoreConnection, 
+  saveProjectToCustomFirestore, 
+  fetchProjectsFromCustomFirestore, 
+  fetchProjectDocFromCustomFirestore, 
+  deleteProjectFromCustomFirestore,
+  CustomFirebaseConfig
+} from './services/customFirebaseService';
+import { HelpCircle, Cloud, Shield, Check, AlertCircle, ExternalLink, BookOpen } from 'lucide-react';
 
 export default function App() {
   // Local Storage Helper Methods for Offline Operation
@@ -119,6 +132,32 @@ export default function App() {
   const [projectName, setProjectName] = useState('Untitled Project');
   const [projects, setProjects] = useState<{id: string, name: string, updatedAt: any}[]>([]);
   const [showProjectList, setShowProjectList] = useState(false);
+
+  // Custom Cloud Database State Parameters
+  const [isUsingCustomDb, setIsUsingCustomDb] = useState<boolean>(() => {
+    return getCustomFirebaseConfig() !== null;
+  });
+  const [showDbConfigModal, setShowDbConfigModal] = useState(false);
+  const [customApiKey, setCustomApiKey] = useState('');
+  const [customAuthDomain, setCustomAuthDomain] = useState('');
+  const [customProjectId, setCustomProjectId] = useState('');
+  const [customStorageBucket, setCustomStorageBucket] = useState('');
+  const [customMessagingSenderId, setCustomMessagingSenderId] = useState('');
+  const [customAppId, setCustomAppId] = useState('');
+  const [dbTestState, setDbTestState] = useState<{ status: 'idle' | 'testing' | 'success' | 'failed', message?: string }>({ status: 'idle' });
+
+  // Load existing configuration keys on initialization
+  useEffect(() => {
+    const config = getCustomFirebaseConfig();
+    if (config) {
+      setCustomApiKey(config.apiKey || '');
+      setCustomAuthDomain(config.authDomain || '');
+      setCustomProjectId(config.projectId || '');
+      setCustomStorageBucket(config.storageBucket || '');
+      setCustomMessagingSenderId(config.messagingSenderId || '');
+      setCustomAppId(config.appId || '');
+    }
+  }, []);
 
   const [tooltip, setTooltip] = useState<{ x: number, y: number, content: React.ReactNode, visible: boolean }>({
     x: 0, y: 0, content: '', visible: false
@@ -948,9 +987,49 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  const loadWorkspaceProjects = async (usingCustomCloud = isUsingCustomDb) => {
+    if (usingCustomCloud) {
+      try {
+        setIsSaving(true);
+        const cloudMeta = await fetchProjectsFromCustomFirestore();
+        if (cloudMeta && Array.isArray(cloudMeta)) {
+          const mappedList = cloudMeta.map(p => ({
+            id: p.id,
+            name: p.name,
+            updatedAt: {
+              toDate: () => new Date(p.updatedAt)
+            }
+          }));
+          setProjects(mappedList);
+          
+          if (mappedList.length > 0) {
+            const firstProjId = mappedList[0].id;
+            const customDoc = await fetchProjectDocFromCustomFirestore(firstProjId);
+            if (customDoc) {
+              loadProjectData(firstProjId, customDoc);
+            }
+          } else {
+            setActiveProjectId('custom-default');
+            setProjectName('Untitled Custom Project');
+            setCables([]);
+            setNetworkEquipments([]);
+            setConnections([]);
+            setWorkZones([]);
+          }
+        }
+      } catch (err: any) {
+        console.error("Error loading workspace projects from cloud:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      loadLastLocalProject();
+    }
+  };
+
   useEffect(() => {
-    loadLastLocalProject();
-  }, []);
+    loadWorkspaceProjects();
+  }, [isUsingCustomDb]);
 
   const loadProjectData = (id: string, data: any) => {
     setActiveProjectId(id);
@@ -965,7 +1044,7 @@ export default function App() {
     setIsSaving(true);
     await new Promise(resolve => setTimeout(resolve, 600)); // nice transition
     try {
-      const isNew = forceNew || !activeProjectId || activeProjectId === 'offline-default';
+      const isNew = forceNew || !activeProjectId || activeProjectId === 'offline-default' || activeProjectId === 'custom-default';
       const projectId = isNew ? `proj-${Math.random().toString(36).substr(2, 9)}` : activeProjectId!;
       const nowIso = new Date().toISOString();
 
@@ -979,38 +1058,54 @@ export default function App() {
         updatedAt: nowIso
       };
 
-      saveLocalProjectDoc(projectId, payload);
-
-      const existingMeta = getLocalProjectsMetadata();
-      let updatedMeta = [...existingMeta];
-      const metaIndex = updatedMeta.findIndex(item => item.id === projectId);
-      if (metaIndex >= 0) {
-        updatedMeta[metaIndex] = {
-          id: projectId,
-          name: projectName,
-          updatedAt: nowIso
-        };
-      } else {
-        updatedMeta.push({
-          id: projectId,
-          name: projectName,
-          updatedAt: nowIso
-        });
-      }
-      updatedMeta.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-      saveLocalProjectsMetadata(updatedMeta);
-
-      const mappedList = updatedMeta.map(p => ({
-        id: p.id,
-        name: p.name,
-        updatedAt: {
-          toDate: () => new Date(p.updatedAt)
+      if (isUsingCustomDb) {
+        await saveProjectToCustomFirestore(projectId, payload);
+        const cloudMeta = await fetchProjectsFromCustomFirestore();
+        if (cloudMeta && Array.isArray(cloudMeta)) {
+          const mappedList = cloudMeta.map(p => ({
+            id: p.id,
+            name: p.name,
+            updatedAt: {
+              toDate: () => new Date(p.updatedAt)
+            }
+          }));
+          setProjects(mappedList);
         }
-      }));
-      setProjects(mappedList);
+      } else {
+        saveLocalProjectDoc(projectId, payload);
+
+        const existingMeta = getLocalProjectsMetadata();
+        let updatedMeta = [...existingMeta];
+        const metaIndex = updatedMeta.findIndex(item => item.id === projectId);
+        if (metaIndex >= 0) {
+          updatedMeta[metaIndex] = {
+            id: projectId,
+            name: projectName,
+            updatedAt: nowIso
+          };
+        } else {
+          updatedMeta.push({
+            id: projectId,
+            name: projectName,
+            updatedAt: nowIso
+          });
+        }
+        updatedMeta.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        saveLocalProjectsMetadata(updatedMeta);
+
+        const mappedList = updatedMeta.map(p => ({
+          id: p.id,
+          name: p.name,
+          updatedAt: {
+            toDate: () => new Date(p.updatedAt)
+          }
+        }));
+        setProjects(mappedList);
+      }
       setActiveProjectId(projectId);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving project:', err);
+      alert('Error saving project: ' + (err.message || err));
     } finally {
       setIsSaving(false);
     }
@@ -1064,6 +1159,66 @@ export default function App() {
       setProjects(mappedList);
     }
   }, [projectName, cables, networkEquipments, connections, workZones, activeProjectId]);
+
+  const handleSaveCustomDbConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDbTestState({ status: 'testing' });
+    
+    // Validate required fields
+    if (!customApiKey || !customProjectId || !customAppId) {
+      setDbTestState({ 
+        status: 'failed', 
+        message: 'API Key, Project ID, and App ID are required configuration attributes.' 
+      });
+      return;
+    }
+
+    const testConfig: CustomFirebaseConfig = {
+      apiKey: customApiKey.trim(),
+      authDomain: customAuthDomain.trim(),
+      projectId: customProjectId.trim(),
+      storageBucket: customStorageBucket.trim(),
+      messagingSenderId: customMessagingSenderId.trim(),
+      appId: customAppId.trim()
+    };
+
+    try {
+      // Run the active write test to verify connectivity and rules
+      const passed = await testFirestoreConnection(testConfig);
+      if (passed) {
+        saveCustomFirebaseConfig(testConfig);
+        setIsUsingCustomDb(true);
+        initCustomFirebase();
+        
+        setDbTestState({ 
+          status: 'success', 
+          message: 'Connected successfully! Optical projects will now securely sync directly with your private cloud Firestore DB.' 
+        });
+
+        // Trigger load
+        setTimeout(() => {
+          loadWorkspaceProjects(true);
+          setShowDbConfigModal(false);
+          setDbTestState({ status: 'idle' });
+        }, 1500);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setDbTestState({
+        status: 'failed',
+        message: err.message || 'Connection failed. Please verify that your Firestore instance rules are configured to permit writes.'
+      });
+    }
+  };
+
+  const handleDisableCustomDb = () => {
+    if (confirm("Switch back to offline storage? Your local workspace changes are safe and will be restored immediately.")) {
+      clearCustomFirebaseConfig();
+      setIsUsingCustomDb(false);
+      setShowDbConfigModal(false);
+      setDbTestState({ status: 'idle' });
+    }
+  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1387,12 +1542,31 @@ export default function App() {
               </a>
             </div>
 
-            <div className="flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/5 transition-all shadow-[0_0_15px_rgba(163,230,53,0.05)]">
-              <div className={`w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(163,230,53,0.6)] ${isSaving ? 'animate-pulse bg-orange-500' : ''}`} />
-              <span className="text-[0.55rem] font-mono text-white/50 uppercase tracking-widest font-bold">
-                {isSaving ? 'Saving locally...' : 'Offline Workspace'}
-              </span>
-            </div>
+            {isUsingCustomDb ? (
+              <button 
+                onClick={() => setShowDbConfigModal(true)}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 transition-all shadow-[0_0_15px_rgba(163,230,53,0.1)] cursor-pointer group/db"
+                title="Your Private Cloud Firestore Database is active. Click to view settings."
+              >
+                <div className={`w-1.5 h-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_8px_rgba(163,230,53,0.8)] ${isSaving ? 'animate-pulse bg-orange-400' : ''}`} />
+                <span className="text-[0.58rem] font-mono text-white hover:text-[var(--accent)] transition-colors uppercase tracking-wider font-extrabold flex items-center gap-1.5">
+                  <Cloud size={11} className="text-[var(--accent)]" />
+                  Custom Cloud DB Active
+                </span>
+              </button>
+            ) : (
+              <button 
+                onClick={() => setShowDbConfigModal(true)}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] transition-all cursor-pointer group/db"
+                title="Current layouts are stored locally on your device. Click to link and set up your own Google Firebase Firestore Cloud."
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)] animate-pulse" />
+                <span className="text-[0.58rem] font-mono text-white/50 group-hover/db:text-[var(--accent)] transition-colors uppercase tracking-wider font-bold flex items-center gap-1.5">
+                  <Database size={11} className="text-white/40 group-hover/db:text-[var(--accent)]" />
+                  Offline Workspace (Link Cloud DB)
+                </span>
+              </button>
+            )}
 
             {user && (
               <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 rounded-xl">
@@ -1618,45 +1792,350 @@ export default function App() {
         onClose={() => setShowProjectList(false)}
         projects={projects}
         activeProjectId={activeProjectId}
-        onSelect={(id) => {
-          const projectDoc = getLocalProjectDoc(id);
-          if (projectDoc) {
-            loadProjectData(id, projectDoc);
+        onSelect={async (id) => {
+          if (isUsingCustomDb) {
+            try {
+              setIsSaving(true);
+              const customDoc = await fetchProjectDocFromCustomFirestore(id);
+              if (customDoc) {
+                loadProjectData(id, customDoc);
+              }
+            } catch (err: any) {
+              alert("Error loading project from custom Database: " + err.message);
+            } finally {
+              setIsSaving(false);
+            }
+          } else {
+            const projectDoc = getLocalProjectDoc(id);
+            if (projectDoc) {
+              loadProjectData(id, projectDoc);
+            }
           }
           setShowProjectList(false);
         }}
-        onDelete={(id) => {
-          deleteLocalProjectDoc(id);
-          const updatedMeta = getLocalProjectsMetadata().filter(p => p.id !== id);
-          saveLocalProjectsMetadata(updatedMeta);
-          
-          const mappedList = updatedMeta.map(p => ({
-            id: p.id,
-            name: p.name,
-            updatedAt: {
-              toDate: () => new Date(p.updatedAt)
-            }
-          }));
-          setProjects(mappedList);
-          
-          if (activeProjectId === id) {
-            if (mappedList.length > 0) {
-              const firstProj = mappedList[0];
-              const firstDoc = getLocalProjectDoc(firstProj.id);
-              if (firstDoc) {
-                loadProjectData(firstProj.id, firstDoc);
+        onDelete={async (id) => {
+          if (isUsingCustomDb) {
+            try {
+              setIsSaving(true);
+              await deleteProjectFromCustomFirestore(id);
+              const cloudMeta = await fetchProjectsFromCustomFirestore();
+              const mappedList = cloudMeta ? cloudMeta.map(p => ({
+                id: p.id,
+                name: p.name,
+                updatedAt: {
+                  toDate: () => new Date(p.updatedAt)
+                }
+              })) : [];
+              setProjects(mappedList);
+              if (activeProjectId === id) {
+                if (mappedList.length > 0) {
+                  const firstProj = mappedList[0];
+                  const firstDoc = await fetchProjectDocFromCustomFirestore(firstProj.id);
+                  if (firstDoc) {
+                    loadProjectData(firstProj.id, firstDoc);
+                  }
+                } else {
+                  setActiveProjectId('custom-default');
+                  setProjectName('Untitled Custom Project');
+                  setCables([]);
+                  setNetworkEquipments([]);
+                  setConnections([]);
+                  setWorkZones([]);
+                }
               }
-            } else {
-              setActiveProjectId(null);
-              setProjectName('Untitled Project');
-              setCables([]);
-              setNetworkEquipments([]);
-              setConnections([]);
-              setWorkZones([]);
+            } catch (err: any) {
+              alert("Error deleting project from custom Database: " + err.message);
+            } finally {
+              setIsSaving(false);
+            }
+          } else {
+            deleteLocalProjectDoc(id);
+            const updatedMeta = getLocalProjectsMetadata().filter(p => p.id !== id);
+            saveLocalProjectsMetadata(updatedMeta);
+            
+            const mappedList = updatedMeta.map(p => ({
+              id: p.id,
+              name: p.name,
+              updatedAt: {
+                toDate: () => new Date(p.updatedAt)
+              }
+            }));
+            setProjects(mappedList);
+            
+            if (activeProjectId === id) {
+              if (mappedList.length > 0) {
+                const firstProj = mappedList[0];
+                const firstDoc = getLocalProjectDoc(firstProj.id);
+                if (firstDoc) {
+                  loadProjectData(firstProj.id, firstDoc);
+                }
+              } else {
+                setActiveProjectId(null);
+                setProjectName('Untitled Project');
+                setCables([]);
+                setNetworkEquipments([]);
+                setConnections([]);
+                setWorkZones([]);
+              }
             }
           }
         }}
       />
+
+      {/* CLOUD CONFIGURATION & GUIDE MODAL */}
+      <AnimatePresence>
+        {showDbConfigModal && (
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDbConfigModal(false)}
+              className="absolute inset-0 bg-black/90 backdrop-blur-md"
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-5xl bg-[#0b0e14] border border-white/10 rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col md:flex-row max-h-[90vh]"
+            >
+              {/* Left Panel: Step-By-Step Interactive Guide */}
+              <div className="flex-1 bg-[#10141d]/60 border-r border-white/5 p-6 md:p-8 overflow-y-auto max-h-[45vh] md:max-h-[90vh]">
+                <div className="flex items-center gap-2 mb-6 text-[var(--accent)]">
+                  <BookOpen size={20} />
+                  <h2 className="text-white text-lg font-bold tracking-tight">Database Linking Walkthrough</h2>
+                </div>
+                
+                <p className="text-xs text-white/50 leading-relaxed mb-6">
+                  Set up a free, secure Cloud database with Google Firebase to save, load, and sync all your optic layouts & splice cabinets to the cloud. Follow this guide to link your personal Firebase Firestore!
+                </p>
+
+                <div className="flex flex-col gap-6">
+                  {/* Step 1 */}
+                  <div className="flex gap-4">
+                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                      1
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white tracking-wide">Create your Firebase Project</h4>
+                      <p className="text-xs text-white/40 mt-1 leading-relaxed">
+                        Go to the <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline inline-flex items-center gap-0.5">Firebase Console <ExternalLink size={10} /></a>. Click <strong>Add Project</strong>, enter a project name (e.g. <code className="bg-white/5 px-1 rounded text-red-400">my-networks-workspace</code>), and complete the fast setup.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex gap-4">
+                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                      2
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white tracking-wide">Register a Web Application</h4>
+                      <p className="text-xs text-white/40 mt-1 leading-relaxed">
+                        In your new Firebase project dashboard, click the <strong>Web App icon (&lt;/&gt;)</strong>. Give the application a description, and select Register App. You will see a <code className="text-yellow-400">firebaseConfig</code> object containing your credentials blocks.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex gap-4">
+                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                      3
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white tracking-wide">Initiate Cloud Firestore Data Store</h4>
+                      <p className="text-xs text-white/40 mt-1 leading-relaxed text-justify">
+                        Select <strong>All Products &gt; Firestore Database</strong> in the left sidebar menu. Click <strong>Create Database</strong>. Choose <strong>Start in Test Mode</strong> (which grants initial read/write permissions), select your cloud service region (e.g., <code className="text-emerald-400">us-east1</code> or <code className="text-emerald-400">europe-west3</code>) and confirm.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="flex gap-4">
+                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                      4
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white tracking-wide">Copy and Paste the Keys</h4>
+                      <p className="text-xs text-white/40 mt-1 leading-relaxed">
+                        Copy the fields from your <code className="text-yellow-400">firebaseConfig</code> directly into the form fields on the right. Hit <strong>"Link Custom Database"</strong> to dry-run a handshake connection and lock-in Firebase cloud synchronisation live!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-white/5 flex items-center gap-3 bg-white/[0.02] p-4 rounded-xl">
+                  <Shield size={16} className="text-emerald-400 shrink-0" />
+                  <p className="text-[0.68rem] text-white/40 leading-normal">
+                    <strong>Zero-Trust Architecture:</strong> Your custom database config parameters are saved 100% locally in your secure sandbox localStorage. The app makes direct peer-to-peer SDK inquiries to your private cloud storage without intermediate servers.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Panel: Active Configuration & Bind Form */}
+              <div className="flex-1 p-6 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[45vh] md:max-h-[90vh]">
+                <div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
+                    <div>
+                      <h3 className="text-white font-bold leading-none">Database Parameters</h3>
+                      <span className="text-[0.65rem] text-white/40 font-mono mt-1 block uppercase tracking-widest block font-bold leading-none">
+                        Configure Personal SDK Credentials
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => setShowDbConfigModal(false)}
+                      className="text-white/40 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Test notification status blocks */}
+                  {dbTestState.status !== 'idle' && (
+                    <div className={`p-3.5 rounded-xl text-xs mb-6 border font-mono leading-relaxed ${
+                      dbTestState.status === 'testing' 
+                        ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse'
+                        : dbTestState.status === 'success'
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                        : 'bg-red-500/15 border-red-500/30 text-red-400'
+                    }`}>
+                      <div className="flex items-center gap-2 font-bold mb-1">
+                        {dbTestState.status === 'testing' && <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />}
+                        {dbTestState.status === 'success' && <Check size={14} className="stroke-[3]" />}
+                        {dbTestState.status === 'failed' && <AlertCircle size={14} />}
+                        <span className="uppercase tracking-wider">
+                          {dbTestState.status === 'testing' && 'Testing Handshake connection...'}
+                          {dbTestState.status === 'success' && 'Connection Succeeded!'}
+                          {dbTestState.status === 'failed' && 'Database Integration Failed'}
+                        </span>
+                      </div>
+                      <p className="text-[0.68rem] font-medium leading-relaxed mt-1 opacity-90">{dbTestState.message}</p>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSaveCustomDbConfig} className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">API Key (apiKey)</label>
+                        <input
+                          type="text"
+                          required
+                          value={customApiKey}
+                          onChange={(e) => setCustomApiKey(e.target.value)}
+                          placeholder="AIzaSyA1..."
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Project ID (projectId)</label>
+                        <input
+                          type="text"
+                          required
+                          value={customProjectId}
+                          onChange={(e) => setCustomProjectId(e.target.value)}
+                          placeholder="networks-workspace"
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">App ID (appId)</label>
+                        <input
+                          type="text"
+                          required
+                          value={customAppId}
+                          onChange={(e) => setCustomAppId(e.target.value)}
+                          placeholder="1:1234:web:ab12"
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Auth Domain</label>
+                        <input
+                          type="text"
+                          value={customAuthDomain}
+                          onChange={(e) => setCustomAuthDomain(e.target.value)}
+                          placeholder="(Optional) web-auth.firebaseapp.com"
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Storage Bucket</label>
+                        <input
+                          type="text"
+                          value={customStorageBucket}
+                          onChange={(e) => setCustomStorageBucket(e.target.value)}
+                          placeholder="(Optional) storage.appspot.com"
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Sender ID (messagingSenderId)</label>
+                        <input
+                          type="text"
+                          value={customMessagingSenderId}
+                          onChange={(e) => setCustomMessagingSenderId(e.target.value)}
+                          placeholder="(Optional) 5891366"
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[0.65rem] text-white/30 italic leading-normal">
+                      Note: When linked, standard saving & duplicates trigger Firestore collection operations. Autosaves remain instant in LocalStorage to preserve cloud read/write quotas.
+                    </p>
+
+                    <button
+                      type="submit"
+                      disabled={dbTestState.status === 'testing'}
+                      className="w-full h-11 bg-linear-to-r from-[var(--accent)] to-[#a3e635] text-[#0a0c12] font-black uppercase text-xs tracking-[1.5px] rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(163,230,53,0.3)] mt-2 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {dbTestState.status === 'testing' ? (
+                        <div className="w-5 h-5 border-2 border-[#0a0c12] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        'Link Custom Database'
+                      )}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="mt-8 pt-4 border-t border-white/5 flex flex-col md:flex-row gap-3 items-center justify-between">
+                  {isUsingCustomDb ? (
+                    <button
+                      type="button"
+                      onClick={handleDisableCustomDb}
+                      className="text-red-400 hover:text-red-300 font-mono text-xs font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Disconnect Cloud DB & Switch Offline
+                    </button>
+                  ) : (
+                    <span className="text-white/20 font-mono text-[0.6rem] uppercase tracking-wider">
+                      Currently using Local Storage Workspace
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDbConfigModal(false)}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 duration-200 transition-all text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div 
         ref={containerRef}
