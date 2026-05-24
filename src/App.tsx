@@ -1192,15 +1192,13 @@ export default function App() {
         
         setDbTestState({ 
           status: 'success', 
-          message: 'Connected successfully! Optical projects will now securely sync directly with your private cloud Firestore DB.' 
+          message: 'Connected successfully! Optical projects will now securely sync directly with your private cloud Firestore DB. Re-prioritizing workspaces...' 
         });
 
-        // Trigger load
+        // Trigger immediate page reload to cleanly initialize Firebase with the updated keys
         setTimeout(() => {
-          loadWorkspaceProjects(true);
-          setShowDbConfigModal(false);
-          setDbTestState({ status: 'idle' });
-        }, 1500);
+          window.location.reload();
+        }, 1200);
       }
     } catch (err: any) {
       console.error(err);
@@ -1235,14 +1233,12 @@ export default function App() {
     
     setDbTestState({ 
       status: 'success', 
-      message: 'Linked successfully! Custom database configuration has been bypass-saved.' 
+      message: 'Linked successfully! Custom database configuration has been bypass-saved. Re-initializing...' 
     });
 
     setTimeout(() => {
-      loadWorkspaceProjects(true);
-      setShowDbConfigModal(false);
-      setDbTestState({ status: 'idle' });
-    }, 1500);
+      window.location.reload();
+    }, 1200);
   };
 
   const handleDisableCustomDb = () => {
@@ -1251,6 +1247,7 @@ export default function App() {
       setIsUsingCustomDb(false);
       setShowDbConfigModal(false);
       setDbTestState({ status: 'idle' });
+      window.location.reload();
     }
   };
 

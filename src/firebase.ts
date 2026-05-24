@@ -1,26 +1,51 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-// Retrieve Firebase credentials from Vite environment variables.
-// These should be defined in a .env file or the platform settings.
-// E.g., VITE_FIREBASE_API_KEY=AIzaSy...
-const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
-const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-const storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
-const messagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
-const appId = import.meta.env.VITE_FIREBASE_APP_ID;
+// We read from localStorage directly to share credentials between the database config and primary authentication.
+// This allows the user's custom credentials to dynamically configure authentication as well.
+const LOCAL_STORAGE_KEY = "fiber_custom_firebase_config_v3";
 
-const hasConfig = !!apiKey;
+let customConfig: any = null;
+try {
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (raw) {
+    customConfig = JSON.parse(raw);
+  }
+} catch (e) {
+  // Ignore localStorage read errors in restricted contexts
+}
+
+// Retrieve general Firebase credentials from Vite environment variables (for production deployments).
+// This keeps secrets securely defined on the server side/pipeline and never raw in GitHub source code.
+const envApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+const envAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+const envProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+const envStorageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
+const envMessagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
+const envAppId = import.meta.env.VITE_FIREBASE_APP_ID;
+
+// Config priority:
+// 1. Stored user custom database settings in localStorage (safely private and local to current browser)
+// 2. Hosting climate environment variables (VITE_FIREBASE_*)
+const activeConfig = (customConfig && customConfig.apiKey) ? customConfig : {
+  apiKey: envApiKey,
+  authDomain: envAuthDomain,
+  projectId: envProjectId,
+  storageBucket: envStorageBucket,
+  messagingSenderId: envMessagingSenderId,
+  appId: envAppId
+};
+
+const hasConfig = !!activeConfig.apiKey;
 
 // Fallback configuration to prevent startup crashes when keys are not defined yet
 const firebaseConfig = {
-  apiKey: apiKey || "mock-api-key-to-prevent-startup-crash",
-  authDomain: authDomain || "mock-auth-domain.firebaseapp.com",
-  projectId: projectId || "mock-project-id",
-  storageBucket: storageBucket || "mock-storage.appspot.com",
-  messagingSenderId: messagingSenderId || "000000000000",
-  appId: appId || "1:000000000000:web:00000000000000"
+  apiKey: activeConfig.apiKey || "mock-api-key-to-prevent-startup-crash",
+  authDomain: activeConfig.authDomain || "mock-auth-domain.firebaseapp.com",
+  projectId: activeConfig.projectId || "mock-project-id",
+  storageBucket: activeConfig.storageBucket || "mock-storage.appspot.com",
+  messagingSenderId: activeConfig.messagingSenderId || "000000000000",
+  appId: activeConfig.appId || "1:000000000000:web:00000000000000"
 };
 
 let app;
