@@ -14,7 +14,7 @@ import { CircuitTracePanel } from './components/CircuitTracePanel';
 import { CircuitDatabase } from './components/CircuitDatabase';
 import { Tooltip } from './components/Tooltip';
 import { ProjectList } from './components/ProjectList';
-import { auth, googleProvider } from './firebase';
+import { auth, googleProvider, isFirebaseConfigured } from './firebase';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import { 
   getCustomFirebaseConfig, 
@@ -1435,6 +1435,21 @@ export default function App() {
                 </p>
               </div>
 
+              {!isFirebaseConfigured && (
+                <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[0.7rem] text-amber-300 font-medium leading-relaxed font-mono flex flex-col gap-2 select-none">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                    <strong className="text-amber-200 uppercase tracking-wider text-[9px]">Server Auth Env Offline</strong>
+                  </div>
+                  <p className="opacity-80 text-[10.5px] leading-normal">
+                    Primary Firebase secrets/credentials are not initialized on the hosting server. Standard sign-ins will return an API key error.
+                  </p>
+                  <p className="opacity-90 text-[10.5px] leading-normal text-emerald-400">
+                    Click the "Launch Offline Local Workspace" option below to build, trace, and export your fiber schematics using high-speed offline LocalStorage immediately.
+                  </p>
+                </div>
+              )}
+
               {authError && (
                 <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 font-medium leading-relaxed font-mono animate-pulse">
                   {authError}
@@ -1489,7 +1504,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                className="w-full h-11 bg-[#141c2b] hover:bg-[#1a2538] text-white/80 hover:text-white border border-white/10 hover:border-white/20 font-bold uppercase text-xs tracking-[1px] rounded-xl flex items-center justify-center gap-3 transition-all cursor-pointer mb-6"
+                className="w-full h-11 bg-[#141c2b] hover:bg-[#1a2538] text-white/80 hover:text-white border border-white/10 hover:border-white/20 font-bold uppercase text-xs tracking-[1px] rounded-xl flex items-center justify-center gap-3 transition-all cursor-pointer mb-5"
               >
                 <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -1498,6 +1513,28 @@ export default function App() {
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
                 </svg>
                 {isSignUpMode ? "Sign Up with Google" : "Sign In with Google"}
+              </button>
+
+              <div className="relative flex py-2 items-center mb-4">
+                <div className="flex-grow border-t border-white/5"></div>
+                <span className="flex-shrink mx-4 text-[0.6rem] font-mono text-white/30 uppercase tracking-widest leading-none">Offline Bypass Workspace</span>
+                <div className="flex-grow border-t border-white/5"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUser({
+                    uid: 'offline-guest',
+                    email: 'offline-engineer@local.workspace',
+                    displayName: 'Offline Engineer',
+                    isOfflineBypass: true
+                  });
+                }}
+                className="w-full h-11 bg-emerald-950/25 hover:bg-emerald-900/35 text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/45 font-bold uppercase text-[11px] tracking-[1px] rounded-xl flex items-center justify-center gap-2.5 transition-all cursor-pointer mb-6 shadow-[0_0_20px_rgba(16,185,129,0.04)]"
+              >
+                <Server size={14} className="text-emerald-400 animate-pulse stroke-[2.5]" />
+                Launch Offline Local Workspace
               </button>
 
               <div className="relative font-mono text-[0.6rem] text-white/20 uppercase tracking-widest text-center">
@@ -1615,7 +1652,12 @@ export default function App() {
                 <div className="h-6 w-px bg-white/10" />
                 <button 
                   onClick={async () => {
-                    await signOut(auth);
+                    try {
+                      await signOut(auth);
+                    } catch (err) {
+                      console.error("Firebase signout error:", err);
+                    }
+                    setUser(null);
                   }}
                   className="text-red-400 hover:text-red-300 hover:bg-red-500/15 duration-200 transition-all text-[0.62rem] font-bold uppercase tracking-widest px-2 py-1 rounded-lg border border-red-500/10 bg-red-500/5 font-mono cursor-pointer flex items-center gap-1.5"
                 >
