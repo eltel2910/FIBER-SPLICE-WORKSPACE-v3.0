@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Maximize, MousePointer2, Move, Cable, Download, Square, Share2, Zap, BoxSelect, FileCode, Trash2, Database, ImageIcon, FileType, ChevronDown, Copy, Folder, Layers, Settings, Printer, Server, X, LogOut } from 'lucide-react';
+import { Plus, Maximize, MousePointer2, Move, Cable, Download, Square, Share2, Zap, BoxSelect, FileCode, Trash2, Database, ImageIcon, FileType, ChevronDown, Copy, Folder, Layers, Settings, Printer, Server, X, LogOut, HelpCircle, Cloud, Shield, Check, AlertCircle, ExternalLink, BookOpen } from 'lucide-react';
 import { toPng, toJpeg } from 'html-to-image';
 import { saveAs } from 'file-saver';
 import { exportToDXF } from './services/dxfService';
@@ -14,8 +14,8 @@ import { CircuitTracePanel } from './components/CircuitTracePanel';
 import { CircuitDatabase } from './components/CircuitDatabase';
 import { Tooltip } from './components/Tooltip';
 import { ProjectList } from './components/ProjectList';
-import { auth, googleProvider, isFirebaseConfigured } from './firebase';
-import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
+import { auth, isFirebaseConfigured } from './firebase';
+import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { 
   getCustomFirebaseConfig, 
   saveCustomFirebaseConfig, 
@@ -28,8 +28,6 @@ import {
   deleteProjectFromCustomFirestore,
   CustomFirebaseConfig
 } from './services/customFirebaseService';
-import { HelpCircle, Cloud, Shield, Check, AlertCircle, ExternalLink, BookOpen } from 'lucide-react';
-
 export default function App() {
   // Local Storage Helper Methods for Offline Operation
   const getLocalProjectsMetadata = (): { id: string, name: string, updatedAt: string }[] => {
@@ -127,13 +125,6 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState('Untitled Project');
-  const [projects, setProjects] = useState<{id: string, name: string, updatedAt: any}[]>([]);
-  const [showProjectList, setShowProjectList] = useState(false);
-
-  // Custom Cloud Database State Parameters
   const [isUsingCustomDb, setIsUsingCustomDb] = useState<boolean>(() => {
     return getCustomFirebaseConfig() !== null;
   });
@@ -146,7 +137,7 @@ export default function App() {
   const [customAppId, setCustomAppId] = useState('');
   const [dbTestState, setDbTestState] = useState<{ status: 'idle' | 'testing' | 'success' | 'failed', message?: string }>({ status: 'idle' });
 
-  // Load existing configuration keys on initialization
+  // Load existing database configuration keys on initialization
   useEffect(() => {
     const config = getCustomFirebaseConfig();
     if (config) {
@@ -158,6 +149,14 @@ export default function App() {
       setCustomAppId(config.appId || '');
     }
   }, []);
+
+
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState('Untitled Project');
+  const [projects, setProjects] = useState<{id: string, name: string, updatedAt: any}[]>([]);
+  const [showProjectList, setShowProjectList] = useState(false);
 
   const [tooltip, setTooltip] = useState<{ x: number, y: number, content: React.ReactNode, visible: boolean }>({
     x: 0, y: 0, content: '', visible: false
@@ -1111,55 +1110,6 @@ export default function App() {
     }
   };
 
-  // Autosave when changes happen
-  useEffect(() => {
-    if (activeProjectId) {
-      const projectId = activeProjectId;
-      const nowIso = new Date().toISOString();
-
-      const payload = {
-        id: projectId,
-        name: projectName,
-        cables,
-        networkEquipments,
-        connections,
-        workZones,
-        updatedAt: nowIso
-      };
-
-      saveLocalProjectDoc(projectId, payload);
-
-      // Update metadata list
-      const existingMeta = getLocalProjectsMetadata();
-      const metaIndex = existingMeta.findIndex(item => item.id === projectId);
-      let updatedMeta = [...existingMeta];
-      if (metaIndex >= 0) {
-        updatedMeta[metaIndex] = {
-          id: projectId,
-          name: projectName,
-          updatedAt: nowIso
-        };
-      } else {
-        updatedMeta.push({
-          id: projectId,
-          name: projectName,
-          updatedAt: nowIso
-        });
-      }
-      
-      saveLocalProjectsMetadata(updatedMeta);
-
-      const mappedList = updatedMeta.map(p => ({
-        id: p.id,
-        name: p.name,
-        updatedAt: {
-          toDate: () => new Date(p.updatedAt)
-        }
-      }));
-      setProjects(mappedList);
-    }
-  }, [projectName, cables, networkEquipments, connections, workZones, activeProjectId]);
-
   const handleSaveCustomDbConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setDbTestState({ status: 'testing' });
@@ -1251,6 +1201,55 @@ export default function App() {
     }
   };
 
+  // Autosave when changes happen
+  useEffect(() => {
+    if (activeProjectId) {
+      const projectId = activeProjectId;
+      const nowIso = new Date().toISOString();
+
+      const payload = {
+        id: projectId,
+        name: projectName,
+        cables,
+        networkEquipments,
+        connections,
+        workZones,
+        updatedAt: nowIso
+      };
+
+      saveLocalProjectDoc(projectId, payload);
+
+      // Update metadata list
+      const existingMeta = getLocalProjectsMetadata();
+      const metaIndex = existingMeta.findIndex(item => item.id === projectId);
+      let updatedMeta = [...existingMeta];
+      if (metaIndex >= 0) {
+        updatedMeta[metaIndex] = {
+          id: projectId,
+          name: projectName,
+          updatedAt: nowIso
+        };
+      } else {
+        updatedMeta.push({
+          id: projectId,
+          name: projectName,
+          updatedAt: nowIso
+        });
+      }
+      
+      saveLocalProjectsMetadata(updatedMeta);
+
+      const mappedList = updatedMeta.map(p => ({
+        id: p.id,
+        name: p.name,
+        updatedAt: {
+          toDate: () => new Date(p.updatedAt)
+        }
+      }));
+      setProjects(mappedList);
+    }
+  }, [projectName, cables, networkEquipments, connections, workZones, activeProjectId]);
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
@@ -1266,30 +1265,23 @@ export default function App() {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
     } catch (err: any) {
-      console.error(err);
-      let errMsg = err.message || "Authentication error.";
-      if (errMsg.includes("auth/email-already-in-use")) {
-        errMsg = "This email is already in use. Try signing in instead.";
-      } else if (errMsg.includes("auth/weak-password")) {
-        errMsg = "The password is too weak. Must be at least 6 characters.";
-      } else if (errMsg.includes("auth/user-not-found") || errMsg.includes("auth/wrong-password") || errMsg.includes("auth/invalid-credential")) {
-        errMsg = "Invalid email or password credentials.";
-      } else if (errMsg.includes("auth/invalid-email")) {
-        errMsg = "Please enter a valid email address.";
+      console.error("Firebase auth error:", err);
+      const errorCode = err?.code || "";
+      const errorMessage = err?.message || "";
+      if (isSignUpMode) {
+        if (errorCode === "auth/email-already-in-use" || errorMessage.includes("auth/email-already-in-use") || errorCode.includes("already-in-use") || errorMessage.includes("already-in-use")) {
+          setAuthError("User already exists. Please sign in");
+        } else if (errorCode === "auth/weak-password" || errorMessage.includes("weak-password")) {
+          setAuthError("The password is too weak. Must be at least 6 characters.");
+        } else {
+          setAuthError("An error occurred during sign up.");
+        }
+      } else {
+        // Sign-in errors ("If credentials are incorrect, show:")
+        setAuthError("Email or password is incorrect");
       }
-      setAuthError(errMsg);
     } finally {
       setAuthSubmitting(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setAuthError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
-      console.error(err);
-      setAuthError(err.message || "Failed to authenticate with Google.");
     }
   };
 
@@ -1492,49 +1484,7 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="relative flex py-2 items-center mb-4">
-                <div className="flex-grow border-t border-white/5"></div>
-                <span className="flex-shrink mx-4 text-[0.6rem] font-mono text-white/30 uppercase tracking-widest">Or Authenticate With</span>
-                <div className="flex-grow border-t border-white/5"></div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                className="w-full h-11 bg-[#141c2b] hover:bg-[#1a2538] text-white/80 hover:text-white border border-white/10 hover:border-white/20 font-bold uppercase text-xs tracking-[1px] rounded-xl flex items-center justify-center gap-3 transition-all cursor-pointer mb-5"
-              >
-                <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                </svg>
-                {isSignUpMode ? "Sign Up with Google" : "Sign In with Google"}
-              </button>
-
-              <div className="relative flex py-2 items-center mb-4">
-                <div className="flex-grow border-t border-white/5"></div>
-                <span className="flex-shrink mx-4 text-[0.6rem] font-mono text-white/30 uppercase tracking-widest leading-none">Offline Bypass Workspace</span>
-                <div className="flex-grow border-t border-white/5"></div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setUser({
-                    uid: 'offline-guest',
-                    email: 'offline-engineer@local.workspace',
-                    displayName: 'Offline Engineer',
-                    isOfflineBypass: true
-                  });
-                }}
-                className="w-full h-11 bg-emerald-950/25 hover:bg-emerald-900/35 text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/45 font-bold uppercase text-[11px] tracking-[1px] rounded-xl flex items-center justify-center gap-2.5 transition-all cursor-pointer mb-6 shadow-[0_0_20px_rgba(16,185,129,0.04)]"
-              >
-                <Server size={14} className="text-emerald-400 animate-pulse stroke-[2.5]" />
-                Launch Offline Local Workspace
-              </button>
-
-              <div className="relative font-mono text-[0.6rem] text-white/20 uppercase tracking-widest text-center">
+              <div className="relative font-mono text-[0.6rem] text-white/20 uppercase tracking-widest text-center mt-4">
                 Connected to secure Firebase build auth environment
               </div>
             </div>
@@ -1609,6 +1559,8 @@ export default function App() {
                 Please Help Support: <span className="underline opacity-80 italic tracking-wide">https://buymeacoffee.com/broadbandengineering</span>
               </a>
             </div>
+
+
 
             {isUsingCustomDb ? (
               <button 
@@ -1955,273 +1907,7 @@ export default function App() {
         }}
       />
 
-      {/* CLOUD CONFIGURATION & GUIDE MODAL */}
-      <AnimatePresence>
-        {showDbConfigModal && (
-          <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowDbConfigModal(false)}
-              className="absolute inset-0 bg-black/90 backdrop-blur-md"
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-5xl bg-[#0b0e14] border border-white/10 rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col md:flex-row max-h-[90vh]"
-            >
-              {/* Left Panel: Step-By-Step Interactive Guide */}
-              <div className="flex-1 bg-[#10141d]/60 border-r border-white/5 p-6 md:p-8 overflow-y-auto max-h-[45vh] md:max-h-[90vh]">
-                <div className="flex items-center gap-2 mb-6 text-[var(--accent)]">
-                  <BookOpen size={20} />
-                  <h2 className="text-white text-lg font-bold tracking-tight">Database Linking Walkthrough</h2>
-                </div>
-                
-                <p className="text-xs text-white/50 leading-relaxed mb-6">
-                  Set up a free, secure Cloud database with Google Firebase to save, load, and sync all your optic layouts & splice cabinets to the cloud. Follow this guide to link your personal Firebase Firestore!
-                </p>
 
-                <div className="flex flex-col gap-6">
-                  {/* Step 1 */}
-                  <div className="flex gap-4">
-                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
-                      1
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white tracking-wide">Create your Firebase Project</h4>
-                      <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                        Go to the <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline inline-flex items-center gap-0.5">Firebase Console <ExternalLink size={10} /></a>. Click <strong>Add Project</strong>, enter a project name (e.g. <code className="bg-white/5 px-1 rounded text-red-400">my-networks-workspace</code>), and complete the fast setup.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 2 */}
-                  <div className="flex gap-4">
-                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
-                      2
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white tracking-wide">Register a Web Application</h4>
-                      <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                        In your new Firebase project dashboard, click the <strong>Web App icon (&lt;/&gt;)</strong>. Give the application a description, and select Register App. You will see a <code className="text-yellow-400">firebaseConfig</code> object containing your credentials blocks.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 3 */}
-                  <div className="flex gap-4">
-                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
-                      3
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white tracking-wide">Initiate Cloud Firestore Data Store</h4>
-                      <p className="text-xs text-white/40 mt-1 leading-relaxed text-justify">
-                        Select <strong>All Products &gt; Firestore Database</strong> in the left sidebar menu. Click <strong>Create Database</strong>. Choose <strong>Start in Test Mode</strong> (which grants initial read/write permissions), select your cloud service region (e.g., <code className="text-emerald-400">us-east1</code> or <code className="text-emerald-400">europe-west3</code>) and confirm.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 4 */}
-                  <div className="flex gap-4">
-                    <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
-                      4
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white tracking-wide">Copy and Paste the Keys</h4>
-                      <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                        Copy the fields from your <code className="text-yellow-400">firebaseConfig</code> directly into the form fields on the right. Hit <strong>"Link Custom Database"</strong> to dry-run a handshake connection and lock-in Firebase cloud synchronisation live!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-6 border-t border-white/5 flex items-center gap-3 bg-white/[0.02] p-4 rounded-xl">
-                  <Shield size={16} className="text-emerald-400 shrink-0" />
-                  <p className="text-[0.68rem] text-white/40 leading-normal">
-                    <strong>Zero-Trust Architecture:</strong> Your custom database config parameters are saved 100% locally in your secure sandbox localStorage. The app makes direct peer-to-peer SDK inquiries to your private cloud storage without intermediate servers.
-                  </p>
-                </div>
-              </div>
-
-              {/* Right Panel: Active Configuration & Bind Form */}
-              <div className="flex-1 p-6 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[45vh] md:max-h-[90vh]">
-                <div>
-                  <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
-                    <div>
-                      <h3 className="text-white font-bold leading-none">Database Parameters</h3>
-                      <span className="text-[0.65rem] text-white/40 font-mono mt-1 block uppercase tracking-widest block font-bold leading-none">
-                        Configure Personal SDK Credentials
-                      </span>
-                    </div>
-                    <button 
-                      onClick={() => setShowDbConfigModal(false)}
-                      className="text-white/40 hover:text-white transition-colors cursor-pointer"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  {/* Test notification status blocks */}
-                  {dbTestState.status !== 'idle' && (
-                    <div className={`p-3.5 rounded-xl text-xs mb-6 border font-mono leading-relaxed ${
-                      dbTestState.status === 'testing' 
-                        ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse'
-                        : dbTestState.status === 'success'
-                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                        : 'bg-red-500/15 border-red-500/30 text-red-400'
-                    }`}>
-                      <div className="flex items-center gap-2 font-bold mb-1">
-                        {dbTestState.status === 'testing' && <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />}
-                        {dbTestState.status === 'success' && <Check size={14} className="stroke-[3]" />}
-                        {dbTestState.status === 'failed' && <AlertCircle size={14} />}
-                        <span className="uppercase tracking-wider">
-                          {dbTestState.status === 'testing' && 'Testing Handshake connection...'}
-                          {dbTestState.status === 'success' && 'Connection Succeeded!'}
-                          {dbTestState.status === 'failed' && 'Database Integration Failed'}
-                        </span>
-                      </div>
-                      <p className="text-[0.68rem] font-medium leading-relaxed mt-1 opacity-90">{dbTestState.message}</p>
-                      
-                      {(dbTestState.status === 'testing' || dbTestState.status === 'failed') && (
-                        <div className="mt-3 pt-2 border-t border-white/10 flex justify-between items-center">
-                          <span className="text-[10px] opacity-60">Stuck or getting permission errors?</span>
-                          <button
-                            type="button"
-                            onClick={handleForceSaveCustomDbConfig}
-                            className="text-[10px] uppercase font-black tracking-wider text-orange-400 hover:text-orange-350 underline transition-colors cursor-pointer"
-                          >
-                            Bypass Test & Save Anyway
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleSaveCustomDbConfig} className="flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">API Key (apiKey)</label>
-                        <input
-                          type="text"
-                          required
-                          value={customApiKey}
-                          onChange={(e) => setCustomApiKey(e.target.value)}
-                          placeholder="AIzaSyA1..."
-                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Project ID (projectId)</label>
-                        <input
-                          type="text"
-                          required
-                          value={customProjectId}
-                          onChange={(e) => setCustomProjectId(e.target.value)}
-                          placeholder="networks-workspace"
-                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">App ID (appId)</label>
-                        <input
-                          type="text"
-                          required
-                          value={customAppId}
-                          onChange={(e) => setCustomAppId(e.target.value)}
-                          placeholder="1:1234:web:ab12"
-                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Auth Domain</label>
-                        <input
-                          type="text"
-                          value={customAuthDomain}
-                          onChange={(e) => setCustomAuthDomain(e.target.value)}
-                          placeholder="(Optional) web-auth.firebaseapp.com"
-                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Storage Bucket</label>
-                        <input
-                          type="text"
-                          value={customStorageBucket}
-                          onChange={(e) => setCustomStorageBucket(e.target.value)}
-                          placeholder="(Optional) storage.appspot.com"
-                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Sender ID (messagingSenderId)</label>
-                        <input
-                          type="text"
-                          value={customMessagingSenderId}
-                          onChange={(e) => setCustomMessagingSenderId(e.target.value)}
-                          placeholder="(Optional) 5891366"
-                          className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <p className="text-[0.65rem] text-white/30 italic leading-normal">
-                      Note: When linked, standard saving & duplicates trigger Firestore collection operations. Autosaves remain instant in LocalStorage to preserve cloud read/write quotas.
-                    </p>
-
-                    <button
-                      type="submit"
-                      disabled={dbTestState.status === 'testing'}
-                      className="w-full h-11 bg-linear-to-r from-[var(--accent)] to-[#a3e635] text-[#0a0c12] font-black uppercase text-xs tracking-[1.5px] rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(163,230,53,0.3)] mt-2 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {dbTestState.status === 'testing' ? (
-                        <div className="w-5 h-5 border-2 border-[#0a0c12] border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        'Link Custom Database'
-                      )}
-                    </button>
-                  </form>
-                </div>
-
-                <div className="mt-8 pt-4 border-t border-white/5 flex flex-col md:flex-row gap-3 items-center justify-between">
-                  {isUsingCustomDb ? (
-                    <button
-                      type="button"
-                      onClick={handleDisableCustomDb}
-                      className="text-red-400 hover:text-red-300 font-mono text-xs font-bold uppercase tracking-wider cursor-pointer"
-                    >
-                      Disconnect Cloud DB & Switch Offline
-                    </button>
-                  ) : (
-                    <span className="text-white/20 font-mono text-[0.6rem] uppercase tracking-wider">
-                      Currently using Local Storage Workspace
-                    </span>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setShowDbConfigModal(false)}
-                    className="px-4 py-2 bg-white/5 hover:bg-white/10 duration-200 transition-all text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <div 
         ref={containerRef}
@@ -2705,6 +2391,274 @@ export default function App() {
                 </button>
               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* CLOUD CONFIGURATION & GUIDE MODAL */}
+        <AnimatePresence>
+          {showDbConfigModal && (
+            <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowDbConfigModal(false)}
+                className="absolute inset-0 bg-black/90 backdrop-blur-md"
+              />
+              
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-5xl bg-[#0b0e14] border border-white/10 rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col md:flex-row max-h-[90vh]"
+              >
+                {/* Left Panel: Step-By-Step Interactive Guide */}
+                <div className="flex-1 bg-[#10141d]/60 border-r border-white/5 p-6 md:p-8 overflow-y-auto max-h-[45vh] md:max-h-[90vh]">
+                  <div className="flex items-center gap-2 mb-6 text-[var(--accent)]">
+                    <BookOpen size={20} />
+                    <h2 className="text-white text-lg font-bold tracking-tight">Database Linking Walkthrough</h2>
+                  </div>
+                  
+                  <p className="text-xs text-white/50 leading-relaxed mb-6">
+                    Set up a free, secure Cloud database with Google Firebase to save, load, and sync all your optic layouts & splice cabinets to the cloud. Follow this guide to link your personal Firebase Firestore!
+                  </p>
+
+                  <div className="flex flex-col gap-6">
+                    {/* Step 1 */}
+                    <div className="flex gap-4">
+                      <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                        1
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white tracking-wide">Create your Firebase Project</h4>
+                        <p className="text-xs text-white/40 mt-1 leading-relaxed">
+                          Go to the <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline inline-flex items-center gap-0.5">Firebase Console <ExternalLink size={10} /></a>. Click <strong>Add Project</strong>, enter a project name (e.g. <code className="bg-white/5 px-1 rounded text-red-400">my-networks-workspace</code>), and complete the fast setup.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="flex gap-4">
+                      <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                        2
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white tracking-wide">Register a Web Application</h4>
+                        <p className="text-xs text-white/40 mt-1 leading-relaxed">
+                          In your new Firebase project dashboard, click the <strong>Web App icon (&lt;/&gt;)</strong>. Give the application a description, and select Register App. You will see a <code className="text-yellow-400">firebaseConfig</code> object containing your credentials blocks.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="flex gap-4">
+                      <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                        3
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white tracking-wide">Initiate Cloud Firestore Data Store</h4>
+                        <p className="text-xs text-white/40 mt-1 leading-relaxed text-justify">
+                          Select <strong>All Products &gt; Firestore Database</strong> in the left sidebar menu. Click <strong>Create Database</strong>. Choose <strong>Start in Test Mode</strong> (which grants initial read/write permissions), select your cloud service region (e.g., <code className="text-emerald-400">us-east1</code> or <code className="text-emerald-400">europe-west3</code>) and confirm.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="flex gap-4">
+                      <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-[var(--accent)] font-mono font-bold shrink-0 mt-0.5">
+                        4
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white tracking-wide">Copy and Paste the Keys</h4>
+                        <p className="text-xs text-white/40 mt-1 leading-relaxed">
+                          Copy the fields from your <code className="text-yellow-400">firebaseConfig</code> directly into the form fields on the right. Hit <strong>"Link Custom Database"</strong> to dry-run a handshake connection and lock-in Firebase cloud synchronisation live!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center gap-3 bg-white/[0.02] p-4 rounded-xl">
+                    <Shield size={16} className="text-emerald-400 shrink-0" />
+                    <p className="text-[0.68rem] text-white/40 leading-normal">
+                      <strong>Zero-Trust Architecture:</strong> Your custom database config parameters are saved 100% locally in your secure sandbox localStorage. The app makes direct peer-to-peer SDK inquiries to your private cloud storage without intermediate servers.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Panel: Active Configuration & Bind Form */}
+                <div className="flex-1 p-6 md:p-8 flex flex-col justify-between overflow-y-auto max-h-[45vh] md:max-h-[90vh]">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
+                      <div>
+                        <h3 className="text-white font-bold leading-none">Database Parameters</h3>
+                        <span className="text-[0.65rem] text-white/40 font-mono mt-1 block uppercase tracking-widest leading-none font-bold">
+                          Configure Personal SDK Credentials
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setShowDbConfigModal(false)}
+                        className="text-white/40 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    {/* Test notification status blocks */}
+                    {dbTestState.status !== 'idle' && (
+                      <div className={`p-3.5 rounded-xl text-xs mb-6 border font-mono leading-relaxed ${
+                        dbTestState.status === 'testing' 
+                          ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse'
+                          : dbTestState.status === 'success'
+                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                          : 'bg-red-500/15 border-red-500/30 text-red-400'
+                      }`}>
+                        <div className="flex items-center gap-2 font-bold mb-1">
+                          {dbTestState.status === 'testing' && <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />}
+                          {dbTestState.status === 'success' && <Check size={14} className="stroke-[3]" />}
+                          {dbTestState.status === 'failed' && <AlertCircle size={14} />}
+                          <span className="uppercase tracking-wider">
+                            {dbTestState.status === 'testing' && 'Testing Handshake connection...'}
+                            {dbTestState.status === 'success' && 'Connection Succeeded!'}
+                            {dbTestState.status === 'failed' && 'Database Integration Failed'}
+                          </span>
+                        </div>
+                        <p className="text-[0.68rem] font-medium leading-relaxed mt-1 opacity-90">{dbTestState.message}</p>
+                        
+                        {(dbTestState.status === 'testing' || dbTestState.status === 'failed') && (
+                          <div className="mt-3 pt-2 border-t border-white/10 flex justify-between items-center">
+                            <span className="text-[10px] opacity-60">Stuck or getting permission errors?</span>
+                            <button
+                              type="button"
+                              onClick={handleForceSaveCustomDbConfig}
+                              className="text-[10px] uppercase font-black tracking-wider text-orange-400 hover:text-orange-355 underline transition-colors cursor-pointer"
+                            >
+                              Bypass Test & Save Anyway
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSaveCustomDbConfig} className="flex flex-col gap-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">API Key (apiKey)</label>
+                          <input
+                            type="text"
+                            required
+                            value={customApiKey}
+                            onChange={(e) => setCustomApiKey(e.target.value)}
+                            placeholder="AIzaSyA1..."
+                            className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Project ID (projectId)</label>
+                          <input
+                            type="text"
+                            required
+                            value={customProjectId}
+                            onChange={(e) => setCustomProjectId(e.target.value)}
+                            placeholder="networks-workspace"
+                            className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">App ID (appId)</label>
+                          <input
+                            type="text"
+                            required
+                            value={customAppId}
+                            onChange={(e) => setCustomAppId(e.target.value)}
+                            placeholder="1:1234:web:ab12"
+                            className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Auth Domain</label>
+                          <input
+                            type="text"
+                            value={customAuthDomain}
+                            onChange={(e) => setCustomAuthDomain(e.target.value)}
+                            placeholder="(Optional) web-auth.firebaseapp.com"
+                            className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Storage Bucket</label>
+                          <input
+                            type="text"
+                            value={customStorageBucket}
+                            onChange={(e) => setCustomStorageBucket(e.target.value)}
+                            placeholder="(Optional) storage.appspot.com"
+                            className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[0.62rem] font-bold uppercase tracking-widest text-white/40 font-mono">Sender ID (messagingSenderId)</label>
+                          <input
+                            type="text"
+                            value={customMessagingSenderId}
+                            onChange={(e) => setCustomMessagingSenderId(e.target.value)}
+                            placeholder="(Optional) 5891366"
+                            className="w-full h-10 px-3 rounded-lg bg-white/[0.03] border border-white/10 text-white text-xs focus:outline-none focus:border-[var(--accent)] font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <p className="text-[0.65rem] text-white/30 italic leading-normal">
+                        Note: When linked, standard saving & duplicates trigger Firestore collection operations. Autosaves remain instant in LocalStorage to preserve cloud read/write quotas.
+                      </p>
+
+                      <button
+                        type="submit"
+                        disabled={dbTestState.status === 'testing'}
+                        className="w-full h-11 bg-linear-to-r from-[var(--accent)] to-[#a3e635] text-[#0a0c12] font-black uppercase text-xs tracking-[1.5px] rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(163,230,53,0.3)] mt-2 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {dbTestState.status === 'testing' ? (
+                          <div className="w-5 h-5 border-2 border-[#0a0c12] border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          'Link Custom Database'
+                        )}
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="mt-8 pt-4 border-t border-white/5 flex flex-col md:flex-row gap-3 items-center justify-between">
+                    {isUsingCustomDb ? (
+                      <button
+                        type="button"
+                        onClick={handleDisableCustomDb}
+                        className="text-red-400 hover:text-red-300 font-mono text-xs font-bold uppercase tracking-wider cursor-pointer"
+                      >
+                        Disconnect Cloud DB & Switch Offline
+                      </button>
+                    ) : (
+                      <span className="text-white/20 font-mono text-[0.6rem] uppercase tracking-wider">
+                        Currently using Local Storage Workspace
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDbConfigModal(false)}
+                      className="px-4 py-2 bg-white/5 hover:bg-white/10 duration-200 transition-all text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
       </div>

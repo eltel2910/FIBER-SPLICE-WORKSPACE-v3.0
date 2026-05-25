@@ -1,206 +1,125 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  getDocs, 
-  getDoc, 
-  deleteDoc, 
-  Firestore,
-  query,
-  orderBy
-} from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDocs, getDoc, deleteDoc, collection, Firestore } from "firebase/firestore";
 
 export interface CustomFirebaseConfig {
   apiKey: string;
-  authDomain: string;
+  authDomain?: string;
   projectId: string;
-  storageBucket: string;
-  messagingSenderId: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
   appId: string;
 }
 
 const LOCAL_STORAGE_KEY = "fiber_custom_firebase_config_v3";
+const CUSTOM_APP_NAME = "custom_user_firebase_app";
+
+let customApp: FirebaseApp | null = null;
+let customDb: Firestore | null = null;
 
 export function getCustomFirebaseConfig(): CustomFirebaseConfig | null {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const configStr = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return configStr ? JSON.parse(configStr) : null;
   } catch {
     return null;
   }
 }
 
-export function saveCustomFirebaseConfig(config: CustomFirebaseConfig) {
+export function saveCustomFirebaseConfig(config: CustomFirebaseConfig): void {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
 }
 
-export function clearCustomFirebaseConfig() {
+export function clearCustomFirebaseConfig(): void {
   localStorage.removeItem(LOCAL_STORAGE_KEY);
 }
 
-// Lazy initialization of custom firebase app & firestore
-let customApp: FirebaseApp | null = null;
-let customDb: Firestore | null = null;
-
-export function initCustomFirebase(): { app: FirebaseApp; db: Firestore } | null {
+export function initCustomFirebase(): void {
   const config = getCustomFirebaseConfig();
-  if (!config || !config.apiKey || !config.projectId) {
-    return null;
-  }
-
-  try {
-    const existingApps = getApps();
-    const customAppName = "custom_user_firebase_app";
-    
-    // Find or create the custom app
-    const appRef = existingApps.find(app => app.name === customAppName);
-    if (appRef) {
-      customApp = appRef;
-    } else {
-      customApp = initializeApp(config, customAppName);
+  if (config) {
+    try {
+      getCustomDb(config);
+    } catch (err) {
+      console.error("Failed to pre-initialize custom database:", err);
     }
-    
-    customDb = getFirestore(customApp);
-    return { app: customApp, db: customDb };
-  } catch (err) {
-    console.error("Failed to initialize custom user Firebase app:", err);
-    return null;
   }
 }
 
-export function getCustomDb(): Firestore | null {
-  if (!customDb) {
-    const init = initCustomFirebase();
-    if (init) {
-      customDb = init.db;
-    }
+export function getCustomDb(config?: CustomFirebaseConfig): Firestore {
+  if (customDb && !config) {
+    return customDb;
   }
+
+  const activeConfig = config || getCustomFirebaseConfig();
+  if (!activeConfig) {
+    throw new Error("No custom Firebase configuration provided or found in storage.");
+  }
+
+  const apps = getApps();
+  const existingApp = apps.find(app => app.name === CUSTOM_APP_NAME);
+
+  if (existingApp) {
+    customApp = existingApp;
+  } else {
+    customApp = initializeApp(activeConfig, CUSTOM_APP_NAME);
+  }
+
+  customDb = getFirestore(customApp);
   return customDb;
 }
 
-/**
- * Test connectivity with user's customized Firestore database with a 5-second timeout constraint
- */
 export async function testFirestoreConnection(config: CustomFirebaseConfig): Promise<boolean> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("Handshake connection timed out. This usually means either: 1) Cloud Firestore hasn't been created yet in the Console, or 2) Security rules are blocking the connection. Try switching your Rules to Test Mode, or bypass the test."));
-    }, 5000);
+  const tempAppName = "temp_test_firebase_app_" + Date.now();
+  const tempApp = initializeApp(config, tempAppName);
+  const tempDb = getFirestore(tempApp);
+
+  const testDocRef = doc(tempDb, "_connection_test_", "handshake_" + Date.now());
+  await setDoc(testDocRef, {
+    testedAt: new Date().toISOString(),
+    status: "ok"
   });
 
-  const connectionPromise = (async () => {
-    try {
-      const tempAppName = "temp_test_firebase_app_" + Date.now();
-      const testApp = initializeApp(config, tempAppName);
-      const testDb = getFirestore(testApp);
-      const testDocRef = doc(testDb, "fiber_connection_test", "ping");
-      
-      // Attempt a light setDoc write test to confirm cloud read/write permissions are active
-      await setDoc(testDocRef, {
-        testedAt: new Date().toISOString(),
-        status: "online"
-      }, { merge: true });
-      
-      return true;
-    } catch (err: any) {
-      console.error("Failed connection test to customized cloud Firestore:", err);
-      throw err;
-    }
-  })();
+  try {
+    await deleteDoc(testDocRef);
+  } catch (e) {
+    console.warn("Cleanup of custom connection test doc failed:", e);
+  }
 
-  return Promise.race([connectionPromise, timeoutPromise]);
+  return true;
 }
 
-/**
- * Saves a fiber optic splice layout workspace to the user's custom Firestore
- */
 export async function saveProjectToCustomFirestore(projectId: string, payload: any): Promise<void> {
   const db = getCustomDb();
-  if (!db) {
-    throw new Error("Custom Firestore is not configured or failed to load.");
-  }
-
-  try {
-    const docRef = doc(db, "fiber_projects", projectId);
-    await setDoc(docRef, {
-      ...payload,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-  } catch (err: any) {
-    console.error("Firestore save error:", err);
-    throw new Error(err.message || "Failed to save design to customized Firestore. Ensure security rules allow read/write workflows.");
-  }
+  const docRef = doc(db, "projects", projectId);
+  await setDoc(docRef, payload);
 }
 
-/**
- * Retrieves a list of project metadata lists from custom Firestore
- */
-export async function fetchProjectsFromCustomFirestore(): Promise<Array<{ id: string; name: string; updatedAt: string }>> {
+export async function fetchProjectsFromCustomFirestore(): Promise<any[]> {
   const db = getCustomDb();
-  if (!db) {
-    return [];
-  }
-
-  try {
-    const collRef = collection(db, "fiber_projects");
-    const querySnap = await getDocs(collRef);
-    const results: Array<{ id: string; name: string; updatedAt: string }> = [];
-    
-    querySnap.forEach((doc) => {
-      const data = doc.data();
-      results.push({
-        id: doc.id,
-        name: data.name || "Untitled Project",
-        updatedAt: data.updatedAt || new Date().toISOString()
-      });
+  const querySnapshot = await getDocs(collection(db, "projects"));
+  const projects: any[] = [];
+  querySnapshot.forEach((doc) => {
+    const data = doc.data();
+    projects.push({
+      id: doc.id,
+      name: data.name || "Untitled Project",
+      updatedAt: data.updatedAt || new Date().toISOString()
     });
-
-    // Sort by latest updated date
-    return results.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  } catch (err: any) {
-    console.error("Firestore get collection metadata error:", err);
-    throw new Error(err.message || "Failed to load project indexes from customized Firestore.");
-  }
+  });
+  return projects;
 }
 
-/**
- * Loads a full detailed project document by ID
- */
-export async function fetchProjectDocFromCustomFirestore(projectId: string): Promise<any | null> {
+export async function fetchProjectDocFromCustomFirestore(id: string): Promise<any> {
   const db = getCustomDb();
-  if (!db) {
-    return null;
+  const docRef = doc(db, "projects", id);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return docSnap.data();
   }
-
-  try {
-    const docRef = doc(db, "fiber_projects", projectId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data();
-    }
-    return null;
-  } catch (err: any) {
-    console.error("Firestore load document error:", err);
-    throw new Error(err.message || "Failed to retrieve layout document data.");
-  }
+  return null;
 }
 
-/**
- * Deletes a project document from custom Firestore
- */
-export async function deleteProjectFromCustomFirestore(projectId: string): Promise<void> {
+export async function deleteProjectFromCustomFirestore(id: string): Promise<void> {
   const db = getCustomDb();
-  if (!db) {
-    return;
-  }
-
-  try {
-    const docRef = doc(db, "fiber_projects", projectId);
-    await deleteDoc(docRef);
-  } catch (err: any) {
-    console.error("Firestore delete document error:", err);
-    throw new Error(err.message || "Failed to delete project from custom Firestore.");
-  }
+  const docRef = doc(db, "projects", id);
+  await deleteDoc(docRef);
 }
