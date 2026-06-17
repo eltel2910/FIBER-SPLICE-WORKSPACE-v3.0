@@ -213,7 +213,7 @@ export const NetworkNode: React.FC<NetworkNodeProps> = ({
 
                 {/* Label - Positioned between Chassis and Dot to avoid fiber coverage */}
                 <text
-                  x={dotX + (isLeft ? 15 : -15)}
+                  x={dotX + (isLeft ? 8 : -15)}
                   y={portY + 3}
                   textAnchor={isLeft ? 'start' : 'end'}
                   className={`font-mono text-[7px] pointer-events-none transition-colors tracking-tight ${

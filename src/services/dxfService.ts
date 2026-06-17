@@ -197,16 +197,76 @@ export const exportToDXF = (
     const w = 240;
     const h = 80 + (eq.ports * 30);
     drawBox(eq.x, getCADY(eq.y), eq.x + w, getCADY(eq.y + h), 'Equipment');
-    drawing.setActiveLayer('Text');
-    drawing.drawText(eq.x + 10, getCADY(eq.y + 35), 22.5, 0, eq.name);
     
+    // Draw horizontal partition line separating the header block
+    drawing.setActiveLayer('Equipment');
+    drawing.drawLine(eq.x, getCADY(eq.y + 50), eq.x + w, getCADY(eq.y + 50));
+
+    // Draw metadata inside header
+    drawing.setActiveLayer('Text');
+    drawing.drawText(eq.x + 12, getCADY(eq.y + 22), 11, 0, `TYPE: ${eq.name.toUpperCase()}`);
+    drawing.drawText(eq.x + 12, getCADY(eq.y + 40), 9, 0, `BLDG: ${(eq.building || '---').toUpperCase()}`);
+    
+    // Draw capacity boxes / slot rows inside the chassis
+    for (let i = 0; i < eq.ports; i++) {
+        const slotTopY = eq.y + 60 + (i * 30);
+        const slotBottomY = slotTopY + 30;
+        const slotCenterY = slotTopY + 15;
+
+        // Draw divider under slot (except for the last port which has the chassis bottom edge)
+        if (i < eq.ports - 1) {
+            drawing.setActiveLayer('Equipment');
+            drawing.drawLine(eq.x, getCADY(slotBottomY), eq.x + w, getCADY(slotBottomY));
+        }
+
+        // Get active circuit mapped to this port
+        const ref = { 
+          equipmentId: eq.id, 
+          side: eq.side, 
+          tubeIdx: 0, 
+          strandIdx: i 
+        };
+        const conn = connections.find(c => 
+          (c.from.equipmentId === eq.id && c.from.strandIdx === i) || 
+          (c.to.equipmentId === eq.id && c.to.strandIdx === i)
+        );
+        const circuitName = conn?.circuitName || '';
+        const slotLabel = (i + 1).toString().padStart(2, '0');
+
+        drawing.setActiveLayer('Text');
+        
+        if (eq.side === 'left') {
+            // Label is on the right side of the row, circuit name is on the left
+            drawing.drawText(eq.x + 215, getCADY(slotCenterY + 2.5), 7, 0, slotLabel);
+            if (circuitName) {
+                const cleanName = circuitName.toUpperCase();
+                const textHeight = cleanName.length > 18 ? 8 : 10;
+                drawing.drawText(eq.x + 12, getCADY(slotCenterY + 3.5), textHeight, 0, cleanName);
+            } else {
+                drawing.drawText(eq.x + 12, getCADY(slotCenterY + 3.5), 8, 0, `P-${i + 1}`);
+            }
+        } else {
+            // Label is on the left side of the row, circuit name is on the right
+            drawing.drawText(eq.x + 12, getCADY(slotCenterY + 2.5), 7, 0, slotLabel);
+            if (circuitName) {
+                const cleanName = circuitName.toUpperCase();
+                const textHeight = cleanName.length > 18 ? 8 : 10;
+                drawing.drawText(eq.x + 35, getCADY(slotCenterY + 3.5), textHeight, 0, cleanName);
+            } else {
+                drawing.drawText(eq.x + 35, getCADY(slotCenterY + 3.5), 8, 0, `P-${i + 1}`);
+            }
+        }
+    }
+
+    // Draw active connectivity circles outside the chassis
     for (let i = 0; i < eq.ports; i++) {
         const portY = eq.y + 50 + 10 + (i * 30) + 15;
-        const portX = eq.side === 'left' ? eq.x + 10 : eq.x + 240 + LAYOUT.FAN_GAP;
+        const portX = eq.side === 'left' ? eq.x - LAYOUT.FAN_GAP : eq.x + 240 + LAYOUT.FAN_GAP;
         drawing.setActiveLayer('Equipment');
         drawing.drawCircle(portX, getCADY(portY), 5);
         drawing.setActiveLayer('Text');
-        drawing.drawText(portX + (eq.side === 'left' ? 10 : -45), getCADY(portY + 2), 6, 0, `P-${i + 1}`);
+        const labelX = eq.side === 'left' ? portX + 8 : portX - 20;
+        drawing.drawText(labelX, getCADY(portY + 2), 6, 0, `P-${i + 1}`);
     }
   });
 
@@ -218,7 +278,7 @@ export const exportToDXF = (
             const eq = equipments.find(e => e.id === ref.equipmentId);
             if (!eq) return { x: 0, y: 0 };
             const portY = eq.y + 50 + 10 + (ref.strandIdx * 30) + 15;
-            const portX = eq.side === 'left' ? eq.x + 10 : eq.x + 240 + LAYOUT.FAN_GAP;
+            const portX = eq.side === 'left' ? eq.x - LAYOUT.FAN_GAP : eq.x + 240 + LAYOUT.FAN_GAP;
             return { x: portX, y: portY };
         }
         const cab = cables.find(c => c.id === ref.cableId);
@@ -249,15 +309,6 @@ export const exportToDXF = (
     
     drawing.setActiveLayer(connLayer);
     drawing.drawPolyline(points);
-    
-    if (conn.circuitName) {
-        drawing.setActiveLayer('Text');
-        const midT = 0.5;
-        const tx = Math.pow(1-midT, 3) * p1.x + 3 * Math.pow(1-midT, 2) * midT * mx1 + 3 * (1-midT) * Math.pow(midT, 2) * mx1 + Math.pow(midT, 3) * p2.x;
-        const ty = Math.pow(1-midT, 3) * p1.y + 3 * Math.pow(1-midT, 2) * midT * p1.y + 3 * (1-midT) * Math.pow(midT, 2) * p2.y + Math.pow(midT, 3) * p2.y;
-        
-        drawing.drawText(tx, getCADY(ty - 5), 12, 0, `CIRCUIT: ${conn.circuitName}`);
-    }
   });
 
   return drawing.toDxfString();

@@ -73,13 +73,22 @@ export async function testFirestoreConnection(config: CustomFirebaseConfig): Pro
   const tempDb = getFirestore(tempApp);
 
   const testDocRef = doc(tempDb, "_connection_test_", "handshake_" + Date.now());
-  await setDoc(testDocRef, {
+  
+  // 5-second timeout to prevent indefinite hanging (Firestore SDK default behavior on incorrect endpoint/creds)
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Connection timed out after 5 seconds. Please verify that: 1) You turned on 'Firestore Database' in your Firebase console. 2) You initialized it in 'Test Mode' or configured rules to allow writes. 3) Your API Key and Project ID are 100% correct.")), 5000)
+  );
+
+  const writePromise = setDoc(testDocRef, {
     testedAt: new Date().toISOString(),
     status: "ok"
   });
 
+  await Promise.race([writePromise, timeoutPromise]);
+
   try {
-    await deleteDoc(testDocRef);
+    const deletePromise = deleteDoc(testDocRef);
+    await Promise.race([deletePromise, timeoutPromise]);
   } catch (e) {
     console.warn("Cleanup of custom connection test doc failed:", e);
   }

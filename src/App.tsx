@@ -201,6 +201,7 @@ export default function App() {
   const [isPanning, setIsPanning] = useState(false);
   const [draggingCableId, setDraggingCableId] = useState<string | null>(null);
   const [draggingEquipId, setDraggingEquipId] = useState<string | null>(null);
+  const [draggingWorkZoneId, setDraggingWorkZoneId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [alignmentGuides, setAlignmentGuides] = useState<{ x: number | null, y: number | null }>({ x: null, y: null });
   const [selectedCount, setSelectedCount] = useState(48);
@@ -392,8 +393,8 @@ export default function App() {
       }
     }
 
-    if (draggingCableId || draggingEquipId) {
-      const draggingId = draggingCableId || draggingEquipId;
+    if (draggingCableId || draggingEquipId || draggingWorkZoneId) {
+      const draggingId = draggingCableId || draggingEquipId || draggingWorkZoneId;
       const rx = (e.clientX - rect.left - pan.x) / scale - dragOffset.x;
       const ry = (e.clientY - rect.top - pan.y) / scale - dragOffset.y;
       
@@ -409,6 +410,9 @@ export default function App() {
           const rW = obj.rightExp.length > 0 ? LAYOUT.BO_EXPANDED : LAYOUT.BO_TUBE_ONLY;
           return lW + 164 + rW;
         }
+        if ('width' in obj) {
+          return obj.width;
+        }
         return 300; // NetworkNode approx
       };
 
@@ -419,10 +423,15 @@ export default function App() {
           const expH = expandedCount * (LAYOUT.STRAND_PAD_V * 2 + 12 * LAYOUT.STRAND_STEP);
           return Math.max(140, baseH + expH);
         }
+        if ('height' in obj) {
+          return obj.height;
+        }
         return 50 + obj.ports * 30 + 20; // NetworkNode totalHeight
       };
 
-      const draggingObj = cables.find(c => c.id === draggingId) || networkEquipments.find(ne => ne.id === draggingId);
+      const draggingObj = cables.find(c => c.id === draggingId) || 
+                          networkEquipments.find(ne => ne.id === draggingId) ||
+                          workZones.find(w => w.id === draggingId);
       if (draggingObj) {
         const dW = getWidth(draggingObj);
         const dH = getHeight(draggingObj);
@@ -430,7 +439,8 @@ export default function App() {
 
         const others = [
           ...cables.filter(c => c.id !== draggingId),
-          ...networkEquipments.filter(e => e.id !== draggingId)
+          ...networkEquipments.filter(e => e.id !== draggingId),
+          ...workZones.filter(w => w.id !== draggingId)
         ];
 
         others.forEach(other => {
@@ -470,8 +480,10 @@ export default function App() {
 
       if (draggingCableId) {
         setCables(prev => prev.map(c => c.id === draggingCableId ? { ...c, x: guideX ?? snappedX, y: guideY ?? snappedY } : c));
-      } else {
+      } else if (draggingEquipId) {
         setNetworkEquipments(prev => prev.map(e => e.id === draggingEquipId ? { ...e, x: guideX ?? snappedX, y: guideY ?? snappedY } : e));
+      } else if (draggingWorkZoneId) {
+        setWorkZones(prev => prev.map(w => w.id === draggingWorkZoneId ? { ...w, x: guideX ?? snappedX, y: guideY ?? snappedY } : w));
       }
     }
 
@@ -540,7 +552,7 @@ export default function App() {
         return { ...prev, toX: finalToX, toY: finalToY };
       });
     }
-  }, [isPanning, draggingCableId, draggingEquipId, pan, scale, dragOffset, draggingLine, cables, networkEquipments, selectionBox, tool, getNodeWorldPos]);
+  }, [isPanning, draggingCableId, draggingEquipId, draggingWorkZoneId, pan, scale, dragOffset, draggingLine, cables, networkEquipments, workZones, selectionBox, tool, getNodeWorldPos]);
 
   const handleMouseUp = (e: React.MouseEvent) => {
     if (draggingLine) {
@@ -571,6 +583,7 @@ export default function App() {
     setIsPanning(false);
     setDraggingCableId(null);
     setDraggingEquipId(null);
+    setDraggingWorkZoneId(null);
     setDraggingLine(null);
     setGlowTarget(null);
     setGlowIntensity(0);
@@ -813,6 +826,21 @@ export default function App() {
     setDragOffset({
       x: (e.clientX - rect.left - pan.x) / scale - equip.x,
       y: (e.clientY - rect.top - pan.y) / scale - equip.y,
+    });
+  };
+
+  const handleWorkZoneDragStart = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const zone = workZones.find(w => w.id === id);
+    if (!zone) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setDraggingWorkZoneId(id);
+    setDragOffset({
+      x: (e.clientX - rect.left - pan.x) / scale - zone.x,
+      y: (e.clientY - rect.top - pan.y) / scale - zone.y,
     });
   };
 
@@ -2039,9 +2067,15 @@ export default function App() {
                 height: zone.height,
               }}
             >
-              <div className="absolute -top-8 left-0 flex items-start gap-3 max-w-[400px] pointer-events-auto">
-                <div className="bg-white/10 backdrop-blur-sm border border-white/10 px-2 py-1.5 rounded text-[0.7rem] font-mono text-white/90 shadow-xl flex items-start gap-2">
-                  <Square size={10} className="text-[var(--accent)] mt-0.5 shrink-0" />
+              <div className="absolute -top-10 left-0 flex items-start gap-3 max-w-[400px] pointer-events-auto">
+                <div 
+                  onMouseDown={(e) => handleWorkZoneDragStart(e, zone.id)}
+                  className={`bg-white/10 backdrop-blur-sm border border-white/10 px-2 py-1.5 rounded-lg text-[0.7rem] font-mono text-white/90 shadow-xl flex items-start gap-2 select-none active:scale-95 transition-all duration-150 ${
+                    draggingWorkZoneId === zone.id ? 'cursor-grabbing border-[var(--accent)]/50' : 'cursor-grab hover:bg-white/15'
+                  }`}
+                  title="Drag from here to move this Zone Boundary grid"
+                >
+                  <Move size={10} className="text-[var(--accent)] mt-0.5 shrink-0" />
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="font-bold whitespace-pre-wrap break-words">{zone.label}</span>
                     {zone.description && <span className="opacity-50 text-[0.6rem] leading-relaxed break-words line-clamp-2">{zone.description}</span>}
@@ -2049,7 +2083,7 @@ export default function App() {
                 </div>
                 <button 
                   onClick={() => setWorkZones(prev => prev.filter(z => z.id !== zone.id))}
-                  className="w-5 h-5 bg-red-500/10 border border-red-500/20 text-red-500/40 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/20 transition-all cursor-pointer"
+                  className="w-5 h-5 bg-red-500/10 border border-red-500/20 text-red-500/40 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/20 transition-all cursor-pointer mt-1"
                 >
                   <Trash2 size={10} />
                 </button>
